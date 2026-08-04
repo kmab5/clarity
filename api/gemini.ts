@@ -5,6 +5,11 @@ import { GoogleGenAI, Type, Schema } from '@google/genai';
 // GEMINI_API_KEY is read from the environment and never sent to the client.
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// Model name is configurable via env var so a future Google deprecation/rename
+// (like gemini-2.5-flash -> gemini-3.6-flash) is a dashboard change, not a code change.
+// Set GEMINI_MODEL in Vercel's env vars to override; falls back to a known-good default.
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+
 const SYSTEM_INSTRUCTION = `
 You are a world-class decision consultant like a combination of a stoic philosopher and a data scientist. 
 Your goal is to help users make decisions quickly by breaking them down into binary choices.
@@ -65,13 +70,12 @@ async function generateQuestions(topic: string) {
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: MODEL,
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: QUESTIONS_SCHEMA,
-      temperature: 0.7,
     },
   });
 
@@ -95,13 +99,12 @@ async function generateFollowUpQuestions(topic: string, questions: string[], ans
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: MODEL,
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: QUESTIONS_SCHEMA,
-      temperature: 0.7,
     },
   });
 
@@ -125,13 +128,12 @@ async function generateDecision(topic: string, questions: string[], answers: Ans
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: MODEL,
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: DECISION_SCHEMA,
-      temperature: 0.5,
     },
   });
 
@@ -171,6 +173,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } catch (error) {
     console.error(`Gemini API error [${action}]:`, error);
-    return res.status(500).json({ error: 'Gemini request failed' });
+    // TEMPORARY: exposing the real message for debugging. Revert to a generic
+    // message once this is working so internal error details aren't public.
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: 'Gemini request failed', detail: message });
   }
 }
